@@ -307,16 +307,38 @@ def rand_n_like(example_vector: ModelParameters) -> ModelParameters:
     return ModelParameters(new_vector)
 
 
-def orthogonal_to(vector: ModelParameters) -> ModelParameters:
+def orthogonal_to(vector: ModelParameters, *vectors: ModelParameters) -> ModelParameters:
     """
     Create a new ModelParameters object of size and shape compatible with the given
-    example vector, such that the two vectors are very nearly orthogonal.
-    :param vector: original vector
-    :return: new vector that is very nearly orthogonal to original vector
+    example vector, such that all vectors are nearly orthognal.
+    :param vector: original vector (separate from list to ensure that at least one vector
+    is passed to function)
+    :param vectors: optional additional vectors that are all (nearly) orthogonal to each
+    other and first vector passed
+    :return: new vector that it very nearly orthogonal to all original vectors
     """
     new_vector = rand_u_like(vector)
     new_vector = new_vector - new_vector.dot(vector) * vector / math.pow(vector.model_norm(2), 2)
+
+    if vectors:
+        for v in vectors:
+            new_vector = new_vector - new_vector.dot(v) * v / math.pow(v.model_norm(2), 2)
+
     return new_vector
+
+
+def check_all_normal(*vectors: ModelParameters) -> bool:
+    """
+    Check if all passed vectors are (nearly) orthogonal to each other
+    :param vectors: list of vectors to be checked
+    :return: True if vectors are nearly orthogonal to each other, otherwise False
+    """
+    for i in range(len(vectors)):
+        for j in range (i+1, len(vectors)):
+            print (vectors[i].dot(vectors[j]))
+            if abs(vectors[i].dot(vectors[j])) > 0.001:
+                return False
+    return True
 
 
 def add(vector_a: ModelParameters, vector_b: ModelParameters) -> ModelParameters:
