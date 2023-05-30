@@ -2,14 +2,15 @@
 Functions for approximating loss/return landscapes in one and two dimensions.
 """
 
+import math
 import copy
 import typing
 import torch.nn
 import numpy as np
+import loss_landscapes.model_interface.model_parameters as model_parameters
 from loss_landscapes.model_interface.model_wrapper import ModelWrapper, wrap_model
 from loss_landscapes.model_interface.model_parameters import rand_u_like, orthogonal_to
 from loss_landscapes.metrics.metric import Metric
-
 
 # noinspection DuplicatedCode
 def point(model: typing.Union[torch.nn.Module, ModelWrapper], metric: Metric) -> tuple:
@@ -323,5 +324,104 @@ def random_plane(model: typing.Union[torch.nn.Module, ModelWrapper], metric: Met
 
     return np.array(data_matrix)
 
-
 # todo add hypersphere function
+
+# noinspection DuplicatedCode
+def random_n_directions(model: typing.Union[torch.nn.Module, ModelWrapper], metric: Metric, dim=3, distance=1, steps=20,
+                 normalization='filter', deepcopy_model=False) -> np.ndarray:
+    """
+    Returns the computed value of the evaluation function applied to the model or agent along a 
+    n-dimensional "slice" subspace of the parameter space defined by a start point and (n-1) randomly 
+    sampled directions. The models supplied can be either torch.nn.Module models, or ModelWrapper 
+    objects from the loss_landscapes library for more complex cases.
+
+    That is, given a neural network model, whose parameters define a point in parameter
+    space, and a distance, the loss is computed at 'steps' ^ 'dimensions' points along the
+    plane defined by the n random directions, from the start point up to the maximum
+    distance in n directions.
+
+    Note that the dimensionality of the model parameters has an impact on the expected
+    length of a uniformly sampled other in parameter space. That is, the more parameters
+    a model has, the longer the distance in the random other's direction should be,
+    in order to see meaningful change in individual parameters. Normalizing the
+    direction other according to the model's current parameter values, which is supported
+    through the 'normalization' parameter, helps reduce the impact of the distance
+    parameter. In future releases, the distance parameter will refer to the maximum change
+    in an individual parameter, rather than the length of the random direction other.
+
+    Note also that a simple n-dimensional approximation with randomly sampled directions can 
+    produce misleading approximations of the loss landscape due to the scale invariance of neural
+    networks. The sharpness/flatness of minima or maxima is affected by the scale of the neural
+    network weights. For more details, see `https://arxiv.org/abs/1712.09913v3`. It is
+    recommended to normalize the directions, preferably with the 'filter' option.
+
+    The Metric supplied has to be a subclass of the loss_landscapes.metrics.Metric class,
+    and must specify a procedure whereby the model passed to it is evaluated on the
+    task of interest, returning the resulting quantity (such as loss, loss gradient, etc).
+
+    :param model: the model defining the origin point of the plane in parameter space
+    :param metric: function of form evaluation_f(model), used to evaluate model loss
+    :param dim: the dimension of the random subspace (the number of random directions generated)
+    :param distance: maximum distance in parameter space from the start point
+    :param steps: at how many steps from start to end the model is evaluated
+    :param normalization: normalization of direction vectors, must be one of 'filter', 'layer', 'model'
+    :param deepcopy_model: indicates whether the method will deepcopy the model(s) to avoid aliasing
+    :return: n-d array of loss values along the line connecting start and end models
+    """
+    model_start_wrapper = wrap_model(copy.deepcopy(model) if deepcopy_model else model)
+    start_point = model_start_wrapper.get_module_parameters()
+
+    # Generate n random normal directions
+    axes = [rand_u_like(start_point)]
+    for _ in range(int(dim-1)):
+        axes += [orthogonal_to(*axes) ]
+    
+    print("Generate one subspace with the dimension of " + str(len(axes)))
+    if(model_parameters.check_all_normal(*axes)):
+        print("All subspace directions are nearly orthogonal to each other")
+    else:
+        print("Subspace directions are not orthogonal to each other")
+    
+    # Normalize directions
+    for axis in axes:
+        if normalization == 'model':
+            axis.model_normalize_(start_point)
+        elif normalization == 'layer':
+            axis.layer_normalize_(start_point)
+        elif normalization == 'filter':
+            axis.filter_normalize_(start_point)
+        elif normalization is None:
+            pass
+        else:
+            raise AttributeError('Unsupported normalization argument. Supported values are model, layer, and filter')
+    
+    # Scale to match steps and total distance
+    for axis in axes:
+        axis.mul_(((start_point.model_norm() * distance) / steps) / axis.model_norm())
+    # Move start point so that original start params will be in the center of the plot
+    for axis in axes:
+        axis.mul_(steps / 2)
+    for axis in axes:
+        start_point.sub_(axis)
+    for axis in axes:
+        axis.truediv_(steps / 2)
+    
+    data_matrix = []
+    # evaluate loss in grid of (steps ^ dimensions) points, where each dimension signifies one step
+    # along one direction. The implementation is again a little convoluted to avoid constructive operations.
+    while(dim > 0):
+        curr_dim_loss = []
+        for j in range(steps):
+            # for every other column, reverse the order in which the column is generated
+            # so you can easily use in-place operations to move along current direction.
+            if dim % 2 == 0:
+                start_point.add_(axes[dim-1])
+                curr_dim_loss.append(metric(model_start_wrapper))
+            else:
+                start_point.sub_(axes[dim-2])
+                start_point.add_(axes[dim-1])
+                curr_dim_loss.insert(0, metric(model_start_wrapper))
+        data_matrix.append(curr_dim_loss)
+        start_point.add_(axes[dim-1])
+        dim -= 1
+    return np.array(data_matrix)
