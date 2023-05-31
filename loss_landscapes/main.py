@@ -406,22 +406,22 @@ def random_n_directions(model: typing.Union[torch.nn.Module, ModelWrapper], metr
     for axis in axes:
         axis.truediv_(steps / 2)
     
-    data_matrix = []
+    # Generate data matrix with correct shape
+    n_dims = []
+
+    # generate the dimension list of the matrix
+    for i in range(dim):
+        n_dims.append(steps)
+    
+    data_matrix = 0
+    for n in n_dims:
+        data_matrix = [data_matrix] * n
+    
+    # print the shape of the generated data matrix
+    print(np.array(data_matrix).shape)
+
     # evaluate loss in grid of (steps ^ dimensions) points, where each dimension signifies one step
-    # along one direction. The implementation is again a little convoluted to avoid constructive operations.
-    while(dim > 0):
-        curr_dim_loss = []
-        for j in range(steps):
-            # for every other column, reverse the order in which the column is generated
-            # so you can easily use in-place operations to move along current direction.
-            if dim % 2 == 0:
-                start_point.add_(axes[dim-1])
-                curr_dim_loss.append(metric(model_start_wrapper))
-            else:
-                start_point.sub_(axes[dim-2])
-                start_point.add_(axes[dim-1])
-                curr_dim_loss.insert(0, metric(model_start_wrapper))
-        data_matrix.append(curr_dim_loss)
-        start_point.add_(axes[dim-1])
-        dim -= 1
+    # along one direction.
+    
+
     return np.array(data_matrix)
