@@ -3,7 +3,6 @@ sys.path.append('../')
 
 # libraries
 import copy
-import time
 import matplotlib
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
@@ -23,7 +22,6 @@ import loss_landscapes
 import loss_landscapes.metrics
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dim', default=3, help='dimension for loss values calculation')
 parser.add_argument('--steps', default=40, help='steps for loss values calculation')
 args = parser.parse_args()
 
@@ -35,7 +33,6 @@ BATCH_SIZE = 512
 EPOCHS = 25
 # contour plot resolution
 STEPS = int(args.steps)
-DIM = int(args.dim)
 
 class MLPSmall(torch.nn.Module):
     """ Fully connected feed-forward neural network with one hidden layer. """
@@ -71,9 +68,6 @@ def train(model, optimizer, criterion, train_loader, epochs):
 
     model.eval()
 
-
-start = time.time()
-
 # download MNIST and setup data loaders
 mnist_train = datasets.MNIST(root='../data', train=True, download=True, transform=Flatten())
 train_loader = torch.utils.data.DataLoader(mnist_train, batch_size=BATCH_SIZE, shuffle=False)
@@ -95,12 +89,7 @@ x, y = iter(train_loader).__next__()
 metric = loss_landscapes.metrics.Loss(criterion, x, y)
 
 # calculate the n-dimensional loss values
-loss_data_fin_n_dim = loss_landscapes.random_n_directions(model_final, metric, DIM, 20, STEPS, normalization='filter', deepcopy_model=True)
+loss_data_fin = loss_landscapes.random_plane(model_final, metric, 20, STEPS, normalization='filter', deepcopy_model=True)
 
-print(loss_data_fin_n_dim.shape)
-
-# save the binary file
-np.save('n_dim_loss_binary_files/mlp_cifar10_dim_' + str(DIM) + '_steps_' + str(STEPS) + '.npy', loss_data_fin_n_dim)
-
-end = time.time()
-print('Time taken: ', end - start)
+print(loss_data_fin)
+print(loss_data_fin.shape)

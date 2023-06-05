@@ -374,28 +374,37 @@ def random_n_directions(model: typing.Union[torch.nn.Module, ModelWrapper], metr
     start_point = model_start_wrapper.get_module_parameters()
 
     # Generate n random normal directions
-    axes = [rand_u_like(start_point)]
-    for _ in range(int(dim-1)):
-        axes += [orthogonal_to(*axes) ]
+    while True:
+        axes = [rand_u_like(start_point)]
+        for _ in range(int(dim-1)):
+            axes += [orthogonal_to(*axes) ]
+        print("Generate one subspace with the dimension of " + str(len(axes)))
+        
+        if(model_parameters.check_all_normal(*axes)):
+            print("All subspace directions are nearly orthogonal to each other")
+            break
+        else:
+            print("Subspace directions are not orthogonal to each other")
+            print("Re-generate subspace directions")
+            axes.clear()
+            continue
     
-    print("Generate one subspace with the dimension of " + str(len(axes)))
-    if(model_parameters.check_all_normal(*axes)):
-        print("All subspace directions are nearly orthogonal to each other")
-    else:
-        print("Subspace directions are not orthogonal to each other")
+    print("Generate " + str(len(axes)) + " random directions")
     
     # Normalize directions
-    for axis in axes:
-        if normalization == 'model':
+    if normalization == 'model':
+        for axis in axes:
             axis.model_normalize_(start_point)
-        elif normalization == 'layer':
+    elif normalization == 'layer':
+        for axis in axes:
             axis.layer_normalize_(start_point)
-        elif normalization == 'filter':
+    elif normalization == 'filter':
+        for axis in axes:
             axis.filter_normalize_(start_point)
-        elif normalization is None:
-            pass
-        else:
-            raise AttributeError('Unsupported normalization argument. Supported values are model, layer, and filter')
+    elif normalization is None:
+        pass
+    else:
+        raise AttributeError('Unsupported normalization argument. Supported values are model, layer, and filter')
     
     # Scale to match steps and total distance
     for axis in axes:
@@ -411,7 +420,7 @@ def random_n_directions(model: typing.Union[torch.nn.Module, ModelWrapper], metr
     # Generate the loss values array using BFS
     # Create an empty array to store the loss values
     shape = tuple([steps] * dim)
-    data_matrix = np.empty(shape, dtype=int)
+    data_matrix = np.empty(shape, dtype=float)
     # Fill array with initial value (e.g., -1)
     data_matrix.fill(-1)
 
@@ -429,6 +438,7 @@ def random_n_directions(model: typing.Union[torch.nn.Module, ModelWrapper], metr
     
     # Fill the starting point with the original start point's loss
     data_matrix[start] = metric(model_start_wrapper)
+    # print("The loss value at " + str(start) + " is " + str(data_matrix[start]))
 
     # Perform BFS
     while not q.empty():
@@ -440,13 +450,13 @@ def random_n_directions(model: typing.Union[torch.nn.Module, ModelWrapper], metr
                 for i in range(dim):
                     start_point.add_(axes[i] * next_pos[i])
                 data_matrix[next_pos] = metric(model_start_wrapper)
-                print("The loss value at " + str(next_pos) + " is " + str(data_matrix[next_pos]))
+                # print("The loss value at " + str(next_pos) + " is " + str(data_matrix[next_pos]))
                 for i in range(dim):
                     start_point.sub_(axes[i] * next_pos[i])
                 q.put(next_pos)
     
     # Check the shape of the data matrix
-    print("The shape of the data matrix is " + str(data_matrix.shape))
-    print("The data matrix is " + str(data_matrix))
+    # print("The shape of the data matrix is " + str(data_matrix.shape))
+    # print("The data matrix is " + str(data_matrix))
 
     return np.array(data_matrix)
