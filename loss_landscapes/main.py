@@ -7,6 +7,8 @@ import copy
 import typing
 import torch.nn
 import numpy as np
+from itertools import product
+from queue import Queue
 import loss_landscapes.model_interface.model_parameters as model_parameters
 from loss_landscapes.model_interface.model_wrapper import ModelWrapper, wrap_model
 from loss_landscapes.model_interface.model_parameters import rand_u_like, orthogonal_to
@@ -406,22 +408,45 @@ def random_n_directions(model: typing.Union[torch.nn.Module, ModelWrapper], metr
     for axis in axes:
         axis.truediv_(steps / 2)
     
-    # Generate data matrix with correct shape
-    n_dims = []
+    # Generate the loss values array using BFS
+    # Create an empty array to store the loss values
+    shape = tuple([steps] * dim)
+    data_matrix = np.empty(shape, dtype=int)
+    # Fill array with initial value (e.g., -1)
+    data_matrix.fill(-1)
 
-    # generate the dimension list of the matrix
-    for i in range(dim):
-        n_dims.append(steps)
-    
-    data_matrix = 0
-    for n in n_dims:
-        data_matrix = [data_matrix] * n
-    
-    # print the shape of the generated data matrix
-    print(np.array(data_matrix).shape)
+    # Generate all possible directions for n-dimensional array
+    directions = list(product([-1, 0, 1], repeat=dim))
+    # Remove the direction of staying at the current position
+    directions.remove(tuple([0] * dim))
 
-    # evaluate loss in grid of (steps ^ dimensions) points, where each dimension signifies one step
-    # along one direction.
+    # Create a queue to store the indices to be visited
+    q = Queue()
+
+    # Start from the origin
+    start = tuple([0] * dim)
+    q.put(start)
     
+    # Fill the starting point with the original start point's loss
+    data_matrix[start] = metric(model_start_wrapper)
+
+    # Perform BFS
+    while not q.empty():
+        current = q.get()
+        for d in directions:
+            next_pos = tuple(np.add(current, d))
+            if all(0 <= pos < steps for pos in next_pos) and data_matrix[next_pos] == -1:
+                # adjust the model and fill with a loss with corresponding model parameters
+                for i in range(dim):
+                    start_point.add_(axes[i] * next_pos[i])
+                data_matrix[next_pos] = metric(model_start_wrapper)
+                print("The loss value at " + str(next_pos) + " is " + str(data_matrix[next_pos]))
+                for i in range(dim):
+                    start_point.sub_(axes[i] * next_pos[i])
+                q.put(next_pos)
+    
+    # Check the shape of the data matrix
+    print("The shape of the data matrix is " + str(data_matrix.shape))
+    print("The data matrix is " + str(data_matrix))
 
     return np.array(data_matrix)
