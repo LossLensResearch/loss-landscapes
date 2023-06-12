@@ -21,3 +21,10 @@ build/
 
 # tests
 tests/
+
+# results
+examples/n_dim_loss_binary_files/*.npy
+
+# other auto generated files
+*.pyc
+*.icloud
