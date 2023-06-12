@@ -3,6 +3,7 @@ Functions for approximating loss/return landscapes in one and two dimensions.
 """
 
 import math
+import tqdm
 import copy
 import typing
 import torch.nn
@@ -443,7 +444,7 @@ def random_n_directions(model: typing.Union[torch.nn.Module, ModelWrapper], metr
     # Perform BFS
     while not q.empty():
         current = q.get()
-        for d in directions:
+        for d in tqdm(directions, desc ="calculating loss values in the subspace"):
             next_pos = tuple(np.add(current, d))
             if all(0 <= pos < steps for pos in next_pos) and data_matrix[next_pos] == -1:
                 # adjust the model and fill with a loss with corresponding model parameters
