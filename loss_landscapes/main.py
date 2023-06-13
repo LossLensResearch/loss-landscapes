@@ -442,19 +442,22 @@ def random_n_directions(model: typing.Union[torch.nn.Module, ModelWrapper], metr
     # print("The loss value at " + str(start) + " is " + str(data_matrix[start]))
 
     # Perform BFS
+    pbar = tqdm.tqdm(total=steps ** dim, desc="Calculating loss values in the subspace")
     while not q.empty():
         current = q.get()
-        for d in tqdm(directions, desc ="calculating loss values in the subspace"):
+        for d in directions:
             next_pos = tuple(np.add(current, d))
             if all(0 <= pos < steps for pos in next_pos) and data_matrix[next_pos] == -1:
                 # adjust the model and fill with a loss with corresponding model parameters
                 for i in range(dim):
                     start_point.add_(axes[i] * next_pos[i])
                 data_matrix[next_pos] = metric(model_start_wrapper)
+                pbar.update(1)
                 # print("The loss value at " + str(next_pos) + " is " + str(data_matrix[next_pos]))
                 for i in range(dim):
                     start_point.sub_(axes[i] * next_pos[i])
                 q.put(next_pos)
+    pbar.close()
     
     # Check the shape of the data matrix
     # print("The shape of the data matrix is " + str(data_matrix.shape))
